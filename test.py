@@ -8,7 +8,7 @@ RATE = 50 * BUFFER
 INTERVALS = 20
 MIN_DB = -50
 LOW = 0
-HIGH = 2000
+HIGH = RATE
 STEPS = 10
 
 p = pyaudio.PyAudio()

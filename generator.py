@@ -5,7 +5,7 @@ BUFFER_LENGTH = 50
 SAMPLE_RATE = 50 * BUFFER_LENGTH  # I grabbed this constant from
 MIN_DB = -50  # Low sound cap
 LOW_FREQUENCY = 0  # Lowest frequency in stream
-HIGH_FREQUENCY = 2000  # Highest frequency in sample
+HIGH_FREQUENCY = SAMPLE_RATE  # Highest frequency in sample
 NUM_COLUMNS = 10  # Number of columns to calculate heights for
 COL_HEIGHT = 10  # How tall columns are
 DATA_STEP = int(SAMPLE_RATE / BUFFER_LENGTH / NUM_COLUMNS)  # Used to cut data into equal parts
@@ -82,7 +82,7 @@ class Generator(object):
             if cap_raw_data:
                 for i in range(data_low, data_high):
                     data[i] = max_f
-            else: # Shift it, because -dB is dumb
+            else:  # Shift it, because -dB is dumb
                 data -= MIN_DB
 
         self._sample_data = data
