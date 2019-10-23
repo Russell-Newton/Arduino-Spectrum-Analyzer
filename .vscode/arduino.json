@@ -1,0 +1,4 @@
+{
+    "board": "arduino:avr:uno",
+    "sketch": "Waveform_Analysis\\Waveform_Analysis.ino"
+}
