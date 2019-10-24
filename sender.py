@@ -1,4 +1,5 @@
 import serial
+import struct
 
 from generator import *
 
@@ -8,7 +9,7 @@ CHAR_OFFSET = 21  # Exclamation point
 class Sender(object):
     def __init__(self, generator: Generator, port: str = 'COM3'):
         self.generator = generator
-        self.ser = serial.Serial(port, 115200, timeout=0.5)
+        self.ser = serial.Serial(port, 115200, timeout=None)
         print("Initializing Sender")
         self.initialize()
 
@@ -29,7 +30,7 @@ class Sender(object):
 
         # Compress pairs of heights into 1 character.
         for height in heights:
-            send_string += chr(height + CHAR_OFFSET)
+            send_string += chr(int(height) + CHAR_OFFSET)
         self.ser.write(bytes(send_string, 'utf-8'))
 
     def initialize(self):
@@ -39,10 +40,16 @@ class Sender(object):
         ping, and the init() method will end.
         """
 
-        from_arduino = ""
-        while len(from_arduino) is 0:
-            self.ser.write(bytes(chr(CHAR_OFFSET), 'utf-8'))    # Ping with CHAR_OFFSET
-            from_arduino = str(self.ser.read(), 'utf-8')        # Look for pong
+        pong = ""
+
+        # while pong is "":
+        #     pong = self._read_from_arduino()
+        print(pong)
+
+        self.ser.write(b'%x' % CHAR_OFFSET)
+        # print(self.ser.read().decode('utf-8'))
+        # print(self.ser.read().decode('utf-8'))
+        print("Ye")
 
         # Send matrix info
         self.ser.write(bytes("{}{}".format(chr(NUM_COLUMNS), chr(COL_HEIGHT)), 'utf-8'))
@@ -54,3 +61,11 @@ class Sender(object):
     def update_and_send(self):
         self.update()
         self.send()
+
+    def _read_from_arduino(self) -> str:
+        from_arduino = ""
+        try:
+            from_arduino = self.ser.read().decode('utf-8')
+        except UnicodeDecodeError:
+            print("Bad character")
+        return from_arduino
