@@ -1,15 +1,16 @@
 import serial
-import struct
+import time
+from typing import Callable
 
 from generator import *
 
-CHAR_OFFSET = 21  # Exclamation point
+CHAR_OFFSET = 65  # Capital A
 
 
 class Sender(object):
-    def __init__(self, generator: Generator, port: str = 'COM3'):
+    def __init__(self, generator: Generator, port: str = 'COM14'):
         self.generator = generator
-        self.ser = serial.Serial(port, 115200, timeout=None)
+        self.ser = serial.Serial(port, 115200, timeout=0.5)
         print("Initializing Sender")
         self.initialize()
 
@@ -31,7 +32,7 @@ class Sender(object):
         # Compress pairs of heights into 1 character.
         for height in heights:
             send_string += chr(int(height) + CHAR_OFFSET)
-        self.ser.write(bytes(send_string, 'utf-8'))
+        self.ser.write(bytes(send_string, 'ascii'))
 
     def initialize(self):
         """
@@ -40,32 +41,42 @@ class Sender(object):
         ping, and the init() method will end.
         """
 
-        pong = ""
+        self._get_valid_from_arduino("Waiting for hello...")
 
-        # while pong is "":
-        #     pong = self._read_from_arduino()
+        def send_metadata():
+            self.ser.write(bytes("{}{}{}".format(
+                chr(CHAR_OFFSET), chr(NUM_COLUMNS + CHAR_OFFSET), chr(COL_HEIGHT + CHAR_OFFSET)), 'ascii'))
+
+        pong = self._get_valid_from_arduino("Sending metadata...", send_metadata)
+
         print(pong)
-
-        self.ser.write(b'%x' % CHAR_OFFSET)
-        # print(self.ser.read().decode('utf-8'))
-        # print(self.ser.read().decode('utf-8'))
-        print("Ye")
-
-        # Send matrix info
-        self.ser.write(bytes("{}{}".format(chr(NUM_COLUMNS), chr(COL_HEIGHT)), 'utf-8'))
-
-        # Wait for pong
-        self.ser.timeout = None
-        self.ser.read()
+        print(self.ser.read().decode('ascii'))
+        print(self.ser.read().decode('ascii'))
+        print("Initialized")
 
     def update_and_send(self):
         self.update()
         self.send()
 
+    def _get_valid_from_arduino(self, debug: str = None, operation: Callable = None) -> str:
+        pong = ""
+        while pong is "":
+            if debug is not None:
+                print(debug)
+            if operation is not None:
+                operation()
+            pong = self._read_from_arduino()
+        return pong
+
     def _read_from_arduino(self) -> str:
+        """
+        Waits for a valid Serial.write() from the Arduino.
+        Returns:
+            The valid serial input from the Arduino.
+        """
         from_arduino = ""
         try:
-            from_arduino = self.ser.read().decode('utf-8')
+            from_arduino = self.ser.read().decode('ascii')
         except UnicodeDecodeError:
             print("Bad character")
         return from_arduino

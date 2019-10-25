@@ -1,4 +1,5 @@
 {
     "board": "arduino:avr:uno",
-    "sketch": "Waveform_Analysis\\Waveform_Analysis.ino"
+    "sketch": "Waveform_Analysis\\Waveform_Analysis.ino",
+    "port": "COM14"
 }
