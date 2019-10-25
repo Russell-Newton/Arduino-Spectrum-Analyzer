@@ -1,6 +1,6 @@
-import serial
-import time
 from typing import Callable
+
+import serial
 
 from generator import *
 
@@ -8,9 +8,14 @@ CHAR_OFFSET = 65  # Capital A
 
 
 class Sender(object):
-    def __init__(self, generator: Generator, port: str = 'COM14'):
+    """
+    A Sender object sends the data from a Generator object to the Arduino with PySerial.
+    """
+
+    def __init__(self, generator: Generator, port: str = 'COM3'):
         self.generator = generator
         self.ser = serial.Serial(port, 115200, timeout=0.5)
+
         print("Initializing Sender")
         self.initialize()
 
@@ -59,6 +64,14 @@ class Sender(object):
         self.send()
 
     def _get_valid_from_arduino(self, debug: str = None, operation: Callable = None) -> str:
+        """
+        Waits for a valid serial input from the Arduino, printing debug and running operation before checking each
+        cycle.
+
+        Returns:
+            The value sent by the Arduino.
+
+        """
         pong = ""
         while pong is "":
             if debug is not None:
@@ -70,9 +83,9 @@ class Sender(object):
 
     def _read_from_arduino(self) -> str:
         """
-        Waits for a valid Serial.write() from the Arduino.
+        Attempts to return a valid Serial.write() from the Arduino.
         Returns:
-            The valid serial input from the Arduino.
+            Either an empty str or the valid serial input from the Arduino.
         """
         from_arduino = ""
         try:

@@ -66,7 +66,8 @@ class Generator(object):
         except IOError:
             pass
 
-        data = np.log10(np.abs(data) / BUFFER_LENGTH) * 10  # Covert to dB
+        with np.errstate(divide='ignore'):  # A divide by zero will not impact the bar height, so stop yelling at me
+            data = np.log10(np.abs(data) / BUFFER_LENGTH) * 10  # Covert to dB
 
         for n in range(0, NUM_COLUMNS):
             # Cut data into frequency ranges
@@ -105,7 +106,7 @@ class Generator(object):
             Arduinos.
         """
 
-        def _map(x: float, in_min: float, in_max: float, out_min: float, out_max: float) -> float:
+        def map(x: float, in_min: float, in_max: float, out_min: float, out_max: float) -> float:
             return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
-        return [_map(n, 0, -MIN_DB, 0, COL_HEIGHT) for n in self._heights]
+        return [map(n, 0, -MIN_DB, 0, COL_HEIGHT) for n in self._heights]

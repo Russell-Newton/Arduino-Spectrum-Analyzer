@@ -1,3 +1,6 @@
+# Yeah this is pretty much taken right from https://gist.github.com/netom/8221b3588158021704d5891a4f9c0edd
+
+
 import matplotlib.animation
 import matplotlib.pyplot as plt
 import numpy as np
@@ -51,7 +54,9 @@ def update_data():
 
     except IOError:
         pass
-    data = np.log10(np.abs(data) / BUFFER) * 10
+
+    with np.errstate(divide='ignore'):
+        data = np.log10(np.abs(data) / BUFFER) * 10
 
     for n in range(0, STEPS):
         data_low = n * data_step
