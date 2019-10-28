@@ -6,6 +6,7 @@
 
 CRGB *leds;
 float *hues;
+int *heights;
 int CHAR_OFFSET = -1;
 int NUM_COLUMNS = -1;
 int COL_HEIGHT = -1;
@@ -33,10 +34,13 @@ void setup() {
   // Setup matrix
   leds = new CRGB[NUM_LEDS];
   hues = new float[NUM_COLUMNS];
+  heights = new int[NUM_COLUMNS];
   FastLED.addLeds<WS2812B, DATA_PIN, GRB> (leds, NUM_LEDS);
   for(int i = 0; i < NUM_COLUMNS; i++) {
     hues[i] = 255 / NUM_COLUMNS * (i + 1);
   }
+
+  // Pong
   delay(100);
   Serial.write((char) CHAR_OFFSET);
   Serial.write((char) (CHAR_OFFSET + NUM_COLUMNS));
@@ -46,7 +50,11 @@ void setup() {
 
 void loop() {
   if(Serial.available() > 0) {
-    Serial.write((char) Serial.read());
+    amassHeights();
+    for(int column = 0; column < NUM_COLUMNS; column++) {
+      setColumnPixels(column, heights[column]);
+      Serial.write((char) (heights[column] + CHAR_OFFSET));
+    }
   }
 }
 
@@ -66,8 +74,14 @@ void setColumnPixels(int column, int height){
 // Wait for a valid ascii character from serial
 char getValidFromSerial() {
   char val = (char) Serial.read();
-  while(val < 33) {
+  while(val < 33) {             // Exclamation point is the first valid character
     val = (char) Serial.read();
   }
   return val;
+}
+
+void amassHeights() {
+  for(int i = 0; i < NUM_COLUMNS; i++) {
+    heights[i] = getValidFromSerial() - CHAR_OFFSET;
+  }
 }
