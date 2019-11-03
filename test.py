@@ -5,14 +5,11 @@ import matplotlib.animation
 import matplotlib.pyplot as plt
 import numpy as np
 import pyaudio
+from scipy import fftpack
 
-BUFFER = 50
-RATE = 50 * BUFFER
-INTERVALS = 20
-MIN_DB = -50
-LOW = 0
-HIGH = RATE
-STEPS = 10
+BUFFER = 2048
+RATE = 44100
+BARS = 16
 
 p = pyaudio.PyAudio()
 
@@ -28,48 +25,62 @@ stream = p.open(
 fig = plt.figure()
 line1 = plt.plot([], [])[0]
 
-r = range(0, RATE, int(RATE / BUFFER))
+# r = range(0, RATE, int(RATE / BUFFER))
+r = fftpack.fftfreq(BUFFER, 1. / RATE)
 l = len(r)
-block_step = int((HIGH - LOW) / STEPS)
-data_step = int(RATE / BUFFER / STEPS)
-frequency_blocks = [c for c in range(LOW, HIGH, block_step)]
+data_step = int(RATE / BUFFER / BARS)
+time_vect = np.arange(BUFFER, dtype=np.float32) / RATE * 1000
+fft_max = 32765
+
+
+def getFFT(data):
+    data = data * np.hamming(len(data))
+    fft = np.abs(np.fft.fft(data))
+    freq = np.fft.fftfreq(len(fft), 1. / RATE)
+    return freq[:int(len(freq) / 2)], fft[:int(len(fft) / 2)]
 
 
 def init_line():
-    line1.set_data(r, [0] * l)
+    line1.set_data(r, [0] * 1)
     return line1,
 
 
 def update_line(i):
-    data = update_data()
-    line1.set_data(r, data)
+    update_data()
     return line1,
 
 
 def update_data():
+    global fft_max
     try:
-        data = np.frombuffer(
-            stream.read(BUFFER), dtype=np.float32)
-        data = np.fft.fft(data)
+        data = np.fromstring(stream.read(BUFFER), 'int16')
+        fftx, fft = getFFT(data)
+        fftx *= 2
+        if fft_max < np.max(fft):
+            fft_max = np.max(fft)
+        fft /= fft_max
 
     except IOError:
         pass
 
-    with np.errstate(divide='ignore'):
-        data = np.log10(np.abs(data) / BUFFER) * 10
+    # print(dbfs)
+    # print(fft / fft_max)
+    fftx_step = fftx[-1] / len(fftx)
+    points_in_buffer = BUFFER / fftx_step
+    step = int(points_in_buffer / (BARS - 1))
+    bars = [0] * len(fft)
+    for i in range(0, BARS):
+        low = i * step
+        high = (i + 1) * step
+        height = np.average(fft[low:high])
+        for j in range(low, high):
+            bars[j] = height
 
-    for n in range(0, STEPS):
-        data_low = n * data_step
-        data_high = (n + 1) * data_step
-        sub_data = data[data_low: data_high]
-        max_f = max(MIN_DB, np.max(sub_data)) - MIN_DB
-        for i in range(data_low, data_high):
-            data[i] = max_f
-    return data
+    line1.set_data(fftx, bars)
 
 
-plt.xlim(LOW, HIGH)
-plt.ylim(0, 60)
+plt.xlim(0, BUFFER)
+plt.ylim(0, 1)
 plt.xlabel('Frequency')
 plt.title('Spectrometer')
 plt.grid()

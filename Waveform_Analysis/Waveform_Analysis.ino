@@ -3,6 +3,8 @@
 
 #define DATA_PIN 3
 #define MIN_SATURATION 150
+#define HUE_LOW 100
+#define HUE_HIGH 200
 
 CRGB *leds;
 float *hues;
@@ -37,7 +39,7 @@ void setup() {
   heights = new int[NUM_COLUMNS];
   FastLED.addLeds<WS2812B, DATA_PIN, GRB> (leds, NUM_LEDS);
   for(int i = 0; i < NUM_COLUMNS; i++) {
-    hues[i] = 255 / NUM_COLUMNS * (i + 1);
+    hues[i] = map(i, 0, NUM_COLUMNS, HUE_LOW, HUE_HIGH);
   }
 
   // Pong
@@ -53,7 +55,7 @@ void loop() {
     amassHeights();
     for(int column = 0; column < NUM_COLUMNS; column++) {
       setColumnPixels(column, heights[column]);
-      Serial.write((char) (heights[column] + CHAR_OFFSET));
+//      Serial.write((char) (heights[column] + CHAR_OFFSET + 1));
     }
   }
 }
@@ -63,9 +65,9 @@ void setColumnPixels(int column, int height){
   for(unsigned char y = 0; y < COL_HEIGHT; y++){
     if(y <= height){  // Set up to height
       int saturation = map(height - y, 0, height, MIN_SATURATION, 255);
-      leds[y + (column * 10)] = CHSV(hues[column], 255, 255);
+      leds[y + (column * COL_HEIGHT)] = CHSV(hues[column], 255, 255);
     } else {
-      leds[y + (column * 10)] = CRGB::Black;
+      leds[y + (column * COL_HEIGHT)] = CRGB::Black;
     }
   }
   FastLED.show();
@@ -82,6 +84,6 @@ char getValidFromSerial() {
 
 void amassHeights() {
   for(int i = 0; i < NUM_COLUMNS; i++) {
-    heights[i] = getValidFromSerial() - CHAR_OFFSET;
+    heights[i] = getValidFromSerial() - CHAR_OFFSET - 1;
   }
 }

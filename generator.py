@@ -1,14 +1,11 @@
 import numpy as np
 import pyaudio
 
-BUFFER_LENGTH = 50
-SAMPLE_RATE = 50 * BUFFER_LENGTH  # I grabbed this constant from
-MIN_DB = -50  # Low sound cap
-LOW_FREQUENCY = 0  # Lowest frequency in stream
-HIGH_FREQUENCY = SAMPLE_RATE  # Highest frequency in sample
-NUM_COLUMNS = 10  # Number of columns to calculate heights for
-COL_HEIGHT = 10  # How tall columns are
-DATA_STEP = int(SAMPLE_RATE / BUFFER_LENGTH / NUM_COLUMNS)  # Used to cut data into equal parts
+BUFFER_LENGTH = 2048
+SAMPLE_RATE = 44100
+NUM_COLUMNS = 16  # Number of columns to calculate heights for
+COL_HEIGHT = 6  # How tall columns are
+MAP_IN_MIN = 0.4  # Found through testing
 
 
 class Generator(object):
@@ -19,13 +16,15 @@ class Generator(object):
 
     See Also:
         https://www.vb-audio.com/Cable/
-        https://gist.github.com/netom/8221b3588158021704d5891a4f9c0edd
+        https://www.swharden.com/wp/2016-07-31-real-time-audio-monitor-with-pyqt/
         https://www.arduino.cc/reference/en/language/functions/math/map/
     """
 
     def __init__(self):
         self._sample_data = []
         self._heights = [0] * NUM_COLUMNS  # Setup column heights
+        self._frames = []
+        self._fft_max = 0
 
         p = pyaudio.PyAudio()  # Setup stream
         self._stream = p.open(
@@ -37,57 +36,48 @@ class Generator(object):
             frames_per_buffer=BUFFER_LENGTH,
         )
 
-    def update_data(self, cap_raw_data: bool = True) -> list:
+        self._freq_vector = np.fft.rfftfreq(BUFFER_LENGTH, 1. / SAMPLE_RATE)
+        self._data_step = int(self._freq_vector[-1] / NUM_COLUMNS)
+
+    def update_data(self):
         """
         Performs a Fast Fourier Transform on the audio stream, converting the results to decibels for the
-        frequencies, which gets returned and saved into self._sample_data. The data is then quanitzed into the ranges
-        set by FREQUENCY_BLOCKS. The maximum intensity from each range is capped at and then shifted by by MIN_DB,
-        so that frequencies at or below MIN_DB are set to 0. These transformed values are saved into the
-        corresponding index in self._heights.
+        frequencies, which gets returned and saved into self._sample_data. The data is then quantized into NUM_COLUMNS
+        ranges. The average intensity from each range will be mapped from [0, MAP_IN_MIN] to [0, COL_HEIGHT] and
+        returned when get_heights() is called.
 
         Credit:
-            Many thanks to Fábián Tamás László (user netom) on GitHub for his base for the stream Fourier Transform.
-            See his gist (Simple spectrum analyzer in python using pyaudio and matplotlib).
+            Many thanks to Scott W Harden for the functions that make the FFT work.
 
         See Also:
-            https://gist.github.com/netom/8221b3588158021704d5891a4f9c0edd
-
-        Parameters:
-            cap_raw_data: Whether or not to set the final data to the appropriate column height.
-
-        Returns:
-            The data from the FFT, transformed into decibels.
+            https://www.swharden.com/wp/2016-07-31-real-time-audio-monitor-with-pyqt/
         """
-        data = []
+        fft = []
+        fftx = []
+
         try:
-            data = np.frombuffer(
-                self._stream.read(BUFFER_LENGTH), dtype=np.float32)
-            data = np.fft.fft(data)
+            data = np.fromstring(self._stream.read(BUFFER_LENGTH), 'int16')
+            fftx, fft = self._getFFT(data)
+            fftx *= 2  # Scale so that 400 Hz is actually 400 Hz
+            if self._fft_max < np.max(fft):  # Reset the max fft value for normalizing
+                self._fft_max = np.max(fft)
+            fft /= self._fft_max  # Normalize
         except IOError:
             pass
 
-        with np.errstate(divide='ignore'):  # A divide by zero will not impact the bar height, so stop yelling at me
-            data = np.log10(np.abs(data) / BUFFER_LENGTH) * 10  # Covert to dB
+        fftx_step = fftx[-1] / len(fftx)  # Step distance between points in fftx
+        points_in_buffer = BUFFER_LENGTH / fftx_step  # How many points are in the buffer size frequency
+        step = int(points_in_buffer / (NUM_COLUMNS - 1))  # How many points should be considered in each column
 
-        for n in range(0, NUM_COLUMNS):
-            # Cut data into frequency ranges
-            data_low = n * DATA_STEP  # Data range low boundary
-            data_high = (n + 1) * DATA_STEP  # Data range high boundary
-            sub_data = data[data_low: data_high]  # Trim
+        # Determine column heights with a segmented average
+        for i in range(0, NUM_COLUMNS):
+            low = i * step
+            high = (i + 1) * step
+            self._heights[i] = np.average(fft[low:high])
+            for j in range(low, high):
+                fft[j] = self._heights[i]
 
-            # Find max, shift, and save
-            max_f = max(MIN_DB, np.max(sub_data)) - MIN_DB
-            self._heights[n] = max_f
-
-            # Set all raw data to the appropriate height
-            if cap_raw_data:
-                for i in range(data_low, data_high):
-                    data[i] = max_f
-            else:  # Shift it, because -dB is dumb
-                data -= MIN_DB
-
-        self._sample_data = data
-        return data
+        self._sample_data = fft
 
     def get_heights(self) -> list:
         """
@@ -95,6 +85,12 @@ class Generator(object):
             The column heights calculated by the last call instance of update_data().
         """
         return self._heights
+
+    def _getFFT(self, data):
+        data = data * np.hamming(len(data))
+        fft = np.abs(np.fft.fft(data))
+        freq = np.fft.fftfreq(len(fft), 1. / SAMPLE_RATE)
+        return freq[:int(len(freq) / 2)], fft[:int(len(fft) / 2)]
 
     def get_mapped_heights(self) -> list:
         """
@@ -109,4 +105,4 @@ class Generator(object):
         def map(x: float, in_min: float, in_max: float, out_min: float, out_max: float) -> float:
             return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
-        return [map(n, 0, -MIN_DB, 0, COL_HEIGHT) for n in self._heights]
+        return [map(n, 0, MAP_IN_MIN, 0, COL_HEIGHT) for n in self._heights]

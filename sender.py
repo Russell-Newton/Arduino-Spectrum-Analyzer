@@ -37,7 +37,9 @@ class Sender(object):
         # Compress pairs of heights into 1 character.
         for height in heights:
             send_string += chr(int(height) + CHAR_OFFSET)
+        # print(send_string)
         self.ser.write(bytes(send_string, 'ascii'))
+        self.ser.flush()
 
     def initialize(self):
         """
